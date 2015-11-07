@@ -1,14 +1,18 @@
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
 
 public class Rainbow {
 	
-	private static final int CHAIN_LENGTH = (int) Math.pow(2, 1);
-	private static final int TABLE_LENGTH = (int) (Math.pow(2, 24) - CHAIN_LENGTH);
+	private static final int CHAIN_LENGTH = (int) Math.pow(2, 8);
+	private static final int TABLE_LENGTH = (int) (Math.pow(2, 24) / CHAIN_LENGTH);
 	private static final int SEED = 444;
 	
 	private static HashMap<String, String> table = new HashMap<>();
@@ -73,6 +77,9 @@ public class Rainbow {
 		// step 1. build
 		build();
 		System.out.println("Table built");
+		writeTableToFile();
+		System.out.println("Table written");
+		//buildNaive();
 		// step 2. crack
 		crack();
 		System.out.println("Crack complete");
@@ -83,15 +90,13 @@ public class Rainbow {
 		Random r = new Random(SEED);
 		for (int i = 0; i < TABLE_LENGTH; i++) {
 //			System.out.println(i);
-			//if (i % 1000 == 0) System.out.println(i);
+			if (i % 1000 == 0) System.out.println(i);
 			
-			byte[] originalWord = new byte[6];
+			byte[] originalWord = getNextWord(r);
 			
-			// get next random byte array
-			r.nextBytes(originalWord);
 			//System.out.println("This is the original word for " + i + " " + Arrays.toString(originalWord));
 			
-			byte[] word = Arrays.copyOf(originalWord, 6);
+			byte[] word = Arrays.copyOf(originalWord, 3);
 			byte[] hash = new byte[20];
 			for (int j = 0; j < CHAIN_LENGTH; j++) {
 				hash = hash(word);
@@ -106,8 +111,7 @@ public class Rainbow {
 //			System.out.println("This is the original word for " + i + " " + originalWordString);
 //			System.out.println("table size: " + table.size());
 			if (table.containsKey(finalHashString)) {
-				System.out.println(i + " inside alr");
-				break;
+				//System.out.println(i + " inside alr");
 			} else {
 //				System.out.println(i + " not inside");
 				table.put(finalHashString, originalWordString);
@@ -128,7 +132,7 @@ public class Rainbow {
 			
 			byte[] inputHash = bf.array();
 			String inputHashString = toHexString(inputHash);
-			System.out.println(inputHashString);
+			//System.out.println(inputHashString);
 			
 			if (table.containsKey(inputHashString)) {
 				found++;
@@ -144,7 +148,9 @@ public class Rainbow {
 					String hashString = toHexString(hash);
 					if (table.containsKey(hashString)) {
 						found++;
-						System.out.println("contains");
+						//System.out.println("contains");
+						// construct the chain until preimage
+						byte[] preimage = getPreimage(hash);
 						break;
 					}
 				}
@@ -161,10 +167,11 @@ public class Rainbow {
 	}
 	
 	private static byte[] reduce(byte[] hash, int iteration) {
-		byte[] reduced = Arrays.copyOfRange(hash, 0, 6);
-		//for (int i = 0; i < reduced.length; i++) {
+		int start = iteration % 17;
+		byte[] reduced = Arrays.copyOfRange(hash, start, start + 3);
+		for (int i = 0; i < reduced.length; i++) {
 			reduced[0] += iteration;
-		//}
+		}
 		
 		return reduced;
 	}
@@ -175,6 +182,49 @@ public class Rainbow {
             sb.append(Integer.toString((barr[i] & 0xff) + 0x100, 16).substring(1));
         }
 		return sb.toString();
+	}
+	
+	private static byte[] getNextWord(Random r) {
+		byte[] nextWord = new byte[3];
+		r.nextBytes(nextWord);
+		return nextWord;
+	}
+	
+	private static void buildNaive() throws Exception {
+		for (int i = 0; i < TABLE_LENGTH; i++) {
+			if (i % 1000 == 0) System.out.println(i);
+			byte[] originalWord = getByteArray(i, 3);
+			String originalWordString = toHexString(originalWord);
+			//System.out.println(originalWordString);
+			byte[] finalHash = hash(originalWord);
+			String finalHashString = toHexString(finalHash);
+			table.put(finalHashString, originalWordString);
+		}
+	}
+	
+	private static byte[] getByteArray(int val, int size) {
+		ByteBuffer bf = ByteBuffer.allocate(4);
+		bf.putInt(val);
+		return Arrays.copyOfRange(bf.array(), 1, 4);
+	}
+	
+	private static void writeTableToFile() throws Exception {
+		BufferedWriter bw = new BufferedWriter(new FileWriter("table.data"));
+		for (Map.Entry<String, String> e : table.entrySet()) {
+			StringBuilder sb = new StringBuilder();
+			sb.append(e.getKey());
+			sb.append(" ");
+			sb.append(e.getValue());
+			sb.append("\n");
+			bw.write(sb.toString());
+		}
+		bw.flush();
+		bw.close();
+	}
+	
+	private static byte[] getPreimage(byte[] hash) {
+		
+		return null;
 	}
 
 }
