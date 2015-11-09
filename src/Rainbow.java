@@ -2,6 +2,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -11,8 +12,10 @@ import java.util.Random;
 import java.util.Scanner;
 
 public class Rainbow {
+
+	private static final boolean NAIVE = true;
+	private static final double NAIVE_TABLE_LENGTH = Math.pow(2, 24);
 	
-	private static final double NAIVE_TABLE_LENGTH = Math.pow(2, 23);
 	private static final int CHAIN_LENGTH = (int) Math.pow(2, 5);
 	private static final int TABLE_LENGTH = (int) (Math.pow(2, 23) / CHAIN_LENGTH);
 	private static final int SEED = 0;
@@ -30,8 +33,15 @@ public class Rainbow {
 		// after every reduce function, check if the digest is already inside the table
 		// stop if exist
 		// else place (finalhash, word) pair in table.
-		
+
 		System.out.println("Start");
+		
+		if (NAIVE) {
+			buildNaive();
+			solveNaiveWithoutTable();
+			return;
+		}
+		
 		// step 0. test
 		testFile();
 		System.out.println(toHexString(hash("20c11b")) + " vs " + "b8568363a1734335ee113002ecee05cfce857ae0");
@@ -40,10 +50,9 @@ public class Rainbow {
 		System.out.println(toHexString(hash("500d13")) + " vs " + "ecd42f98ad2c6490fa782b800693593b0ba112a7");
 		
 		// step 1. build
-//		build();
-		buildNaive();
+		build();
 		System.out.println("Table built");
-//		writeTableToFile();
+		writeTableToFile();
 		System.out.println("Table written");
 		//verify();
 		//System.out.println("Table verified");
@@ -51,7 +60,6 @@ public class Rainbow {
 		// step 2. crack
 		crack();
 		System.out.println("Crack complete");
-		//writeResultToFile();
 		System.out.println("End");
 	}
 
@@ -201,40 +209,6 @@ public class Rainbow {
 		return nextWord;
 	}
 	
-	private static void buildNaive() throws Exception {
-		BufferedWriter bw = new BufferedWriter(new FileWriter("complete-table.data"));
-		long startTime = System.currentTimeMillis();
-		for (int i = 0; i < NAIVE_TABLE_LENGTH; i++) {
-			if (i % 1000000 == 0) System.out.println(i);
-			byte[] originalWord = getByteArray(i, 3);
-			String originalWordString = toHexString(originalWord);
-			//System.out.println(originalWordString);
-			byte[] finalHash = hash(originalWord);
-			String finalHashString = toHexString(finalHash);
-			//table.put(finalHashString, originalWordString);
-			bw.write(finalHashString + " " + originalWordString + "\n");
-		}
-		long endTime = System.currentTimeMillis();
-		long timeTakenSeconds = ((endTime - startTime) / 1000);
-		System.out.println("Time taken for naive: " + timeTakenSeconds + " seconds");
-		bw.close();
-		readTableFromFile();
-	}
-	
-	private static void readTableFromFile() throws Exception {
-		Scanner sc = new Scanner(new BufferedInputStream(new FileInputStream("complete-table.data")));
-		int i = 0;
-		while (sc.hasNext()) {
-			if (i % 1000000 == 0) System.out.println(i);
-			String finalHashString = sc.next();
-			String originalWordString = sc.next();
-			table.put(finalHashString, originalWordString);
-			i++;
-		}
-		System.out.println("File read. Table size: " + table.size());
-		sc.close();
-	}
-	
 	private static byte[] getByteArray(int val, int size) {
 		ByteBuffer bf = ByteBuffer.allocate(4);
 		bf.putInt(val);
@@ -311,6 +285,99 @@ public class Rainbow {
 		}
 		System.out.println(failCount + " out of " + table.size() + " in the table failed");
 		return failCount > 0;
+	}
+	
+	private static void buildNaive() throws Exception {
+		BufferedWriter bw = new BufferedWriter(new FileWriter("complete-table.data"));
+		long startTime = System.currentTimeMillis();
+		for (int i = 0; i < NAIVE_TABLE_LENGTH; i++) {
+			if (i % 1000000 == 0) System.out.println(i);
+			byte[] originalWord = getByteArray(i, 3);
+			String originalWordString = toHexString(originalWord);
+			//System.out.println(originalWordString);
+			byte[] finalHash = hash(originalWord);
+			String finalHashString = toHexString(finalHash);
+			//table.put(finalHashString, originalWordString);
+			bw.write(finalHashString + " " + originalWordString + "\n");
+		}
+		long endTime = System.currentTimeMillis();
+		long timeTakenSeconds = ((endTime - startTime) / 1000);
+		System.out.println("Time taken for naive: " + timeTakenSeconds + " seconds");
+		bw.close();
+	}
+	
+	private static void readTableFromFile() throws Exception {
+		Scanner sc = new Scanner(new BufferedInputStream(new FileInputStream("complete-table.data")));
+		for (int i = 0; i < NAIVE_TABLE_LENGTH; i++) {
+			if (i % 1000000 == 0) System.out.println(i);
+			String finalHashString = sc.next();
+			String originalWordString = sc.next();
+			table.put(finalHashString, originalWordString);
+		}
+		System.out.println("File read. Table size: " + table.size());
+		sc.close();
+	}
+	
+	private static void solveNaive() throws Exception {
+		BufferedWriter bw = new BufferedWriter(new FileWriter("naive-result.txt"));
+		Scanner sc = new Scanner(new FileInputStream("SAMPLE_INPUT.data"));
+		int wordsFound = 0;
+		for (int i = 0; i < 1000; i++) { // for each given hash
+			
+			ByteBuffer bf = ByteBuffer.allocate(20);
+			for (int j = 0; j < 5; j++) {
+				bf.putInt((int)sc.nextLong(16));
+			}
+			
+			byte[] inputHash = bf.array();
+			String inputHashString = toHexString(inputHash);
+			if (table.containsKey(inputHashString)) {
+				wordsFound++;
+				bw.write(table.get(inputHashString) + "\n");
+			} else {
+				bw.write("0\n");
+			}
+		}
+		bw.write("Total Words Found: " + wordsFound);
+		sc.close();
+		bw.close();
+	}
+	
+	private static void solveNaiveWithoutTable() throws Exception {
+		BufferedWriter bw = new BufferedWriter(new FileWriter("naive-result.txt"));
+		Scanner sc = new Scanner(new FileInputStream("SAMPLE_INPUT.data"));
+		int wordsFound = 0;
+		for (int i = 0; i < 1000; i++) { // for each given hash
+			System.out.println("word number " + i);
+			ByteBuffer bf = ByteBuffer.allocate(20);
+			for (int j = 0; j < 5; j++) {
+				bf.putInt((int)sc.nextLong(16));
+			}
+			
+			byte[] inputHash = bf.array();
+			String inputHashString = toHexString(inputHash);
+			boolean got = false;
+			Scanner scTable = new Scanner(new FileInputStream("complete-table.data"));
+			for (int j = 0; j < NAIVE_TABLE_LENGTH; j++) {
+				if (j % 1000000 == 0) System.out.println(j);
+				String[] hashWordPair = scTable.nextLine().split("\\s+");
+				if (hashWordPair[0].equals(inputHashString)) {
+					wordsFound++;
+					bw.write(hashWordPair[1] + "\n");
+					bw.flush();
+					got = true;
+					break;
+				}
+			}
+			if (!got) {
+				bw.write("0\n");
+				bw.flush();
+			}
+			scTable.close();
+		}
+		bw.write("Total Words Found: " + wordsFound);
+		sc.close();
+		bw.close();
 	}
 
 }
