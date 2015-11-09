@@ -21,6 +21,7 @@ public class Rainbow {
 	private static final int SEED = 0;
 	
 	private static HashMap<String, String> table = new HashMap<>();
+	private static HashMap<String, String> table2 = new HashMap<>();
 	private static HashMap<String, String> inputs = new HashMap<>();
 	private static HashMap<String, String> words = new HashMap<>();
 	
@@ -38,7 +39,9 @@ public class Rainbow {
 		
 		if (NAIVE) {
 			buildNaive();
-			solveNaiveWithoutTable();
+			readTableFromFile();
+			solveNaive();
+//			solveNaiveWithoutTable();
 			return;
 		}
 		
@@ -308,13 +311,19 @@ public class Rainbow {
 	
 	private static void readTableFromFile() throws Exception {
 		Scanner sc = new Scanner(new BufferedInputStream(new FileInputStream("complete-table.data")));
-		for (int i = 0; i < NAIVE_TABLE_LENGTH; i++) {
+		for (int i = 0; i < NAIVE_TABLE_LENGTH/2; i++) {
 			if (i % 1000000 == 0) System.out.println(i);
 			String finalHashString = sc.next();
 			String originalWordString = sc.next();
 			table.put(finalHashString, originalWordString);
 		}
-		System.out.println("File read. Table size: " + table.size());
+		for (int i = (int) (NAIVE_TABLE_LENGTH/2); i < NAIVE_TABLE_LENGTH; i++) {
+			if (i % 1000000 == 0) System.out.println(i);
+			String finalHashString = sc.next();
+			String originalWordString = sc.next();
+			table2.put(finalHashString, originalWordString);
+		}
+		System.out.println("File read. Table size: " + (table.size() + table2.size()));
 		sc.close();
 	}
 	
@@ -334,6 +343,9 @@ public class Rainbow {
 			if (table.containsKey(inputHashString)) {
 				wordsFound++;
 				bw.write(table.get(inputHashString) + "\n");
+			} else if (table2.containsKey(inputHashString)) {
+				wordsFound++;
+				bw.write(table2.get(inputHashString) + "\n");
 			} else {
 				bw.write("0\n");
 			}
