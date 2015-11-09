@@ -17,7 +17,7 @@ public class Rainbow {
 	private static final boolean NAIVE = false;
 	private static final double NAIVE_TABLE_LENGTH = Math.pow(2, 24);
 	
-	private static final int CHAIN_LENGTH = (int) Math.pow(2, 9);
+	private static final int CHAIN_LENGTH = (int) Math.pow(2, 10);
 	private static final int TABLE_LENGTH = (int) (Math.pow(2, 24) / CHAIN_LENGTH);
 	private static final int SEED = 0;
 	
@@ -59,7 +59,7 @@ public class Rainbow {
 		System.out.println(toHexString(hash("500d13")) + " vs " + "ecd42f98ad2c6490fa782b800693593b0ba112a7");
 		
 		// step 1. build
-		boolean written = true;
+		boolean written = false;
 		if (!written) {
 			build();
 			System.out.println("Table built");
@@ -78,6 +78,7 @@ public class Rainbow {
 		
 		// step 3. report
 		System.out.println("Speedup = " + ((1000 * bigT) / smallT));
+		System.out.println("Table bytes = " + ((table.size() * 184)/8000));
 		System.out.println("End");
 	}
 
@@ -87,10 +88,14 @@ public class Rainbow {
 //			System.out.println(i);
 			if (i % 1000 == 0) System.out.println(i);
 			
-			byte[] originalWord = getNextWord(r);
-			String originalWordString = toHexString(originalWord);
+			byte[] originalWord;
+			String originalWordString;
+			do {
+				//System.out.println(i);
+				originalWord = getNextWord(r);
+				originalWordString = toHexString(originalWord);
+			} while (words.containsKey(originalWordString));
 			words.put(originalWordString, "");
-			//if (i == 0) System.out.println("This is the original word for " + i + " " + Arrays.toString(originalWord) + " " + originalWordString);
 			
 			byte[] word = toByteArray(originalWordString);//Arrays.copyOf(originalWord, 3);
 			byte[] hash = new byte[20];
@@ -114,6 +119,7 @@ public class Rainbow {
 		}
 		//System.out.println(table.toString());
 		System.out.println("Number of words used: " + words.size());
+		words.clear();
 	}
 	
 	private static void crack() throws Exception {
@@ -136,7 +142,7 @@ public class Rainbow {
 			for (int j = CHAIN_LENGTH - 1; j >= 0; j--) {
 //			for (int j = 0; j <= CHAIN_LENGTH; j++) {
 				//int ccount = 0;
-				byte[] word = new byte[3];
+				byte[] word;
 				byte[] hash = Arrays.copyOf(inputHash, inputHash.length); // hashed w0 -> y0
 				for (int k = j; k < CHAIN_LENGTH - 1; k++) {
 //					System.out.println(k);
@@ -147,7 +153,7 @@ public class Rainbow {
 				String hashString = toHexString(hash);
 				if (table.containsKey(hashString)) {
 					//System.out.println("found " + hashString + " number " + i + " at chain length " + (j) + " " + ccount);
-					resultWord = getPreimage(table.get(hashString), inputHashString, CHAIN_LENGTH - j);
+					resultWord = getPreimage(table.get(hashString), inputHashString);
 					String resultWordString = toHexString(resultWord);
 //					if (resultWordString.equals("00")) {
 //						found--;
@@ -156,7 +162,8 @@ public class Rainbow {
 //					if (true) {
 						found++;
 						got = true;
-						bw.write(resultWordString + "\n");
+						bw.write(resultWordString);
+						bw.write("\n");
 						//System.out.println("result = " + toHexString(resultWord));
 						break;
 					}
@@ -176,7 +183,7 @@ public class Rainbow {
 		System.out.println("Time taken for crack: " + timeTaken + " milliseconds");
 	}
 	
-	private static byte[] getPreimage(String startWordString, String targetHashString, int numOfTimes) throws Exception {
+	private static byte[] getPreimage(String startWordString, String targetHashString) throws Exception {
 		// get the preimage of hash by chaining until hash
 		//System.out.println(startWordString);
 		byte[] word = toByteArray(startWordString);
@@ -239,12 +246,12 @@ public class Rainbow {
 	private static void writeTableToFile() throws Exception {
 		BufferedWriter bw = new BufferedWriter(new FileWriter("table.data"));
 		for (Map.Entry<String, String> e : table.entrySet()) {
-			StringBuilder sb = new StringBuilder();
-			sb.append(e.getKey());
-			sb.append(" ");
-			sb.append(e.getValue());
-			sb.append("\n");
-			bw.write(sb.toString());
+			//StringBuilder sb = new StringBuilder();
+			bw.write(e.getKey());
+			bw.write(" ");
+			bw.write(e.getValue());
+			bw.write("\n");
+			//bw.write(sb.toString());
 		}
 		bw.flush();
 		bw.close();
@@ -293,13 +300,13 @@ public class Rainbow {
 			}
 			
 			byte[] firstWordHash = hash(e.getValue());
-			byte[] preimage = getPreimage(e.getValue(), toHexString(firstWordHash), 0);
+			byte[] preimage = getPreimage(e.getValue(), toHexString(firstWordHash));
 			if (!e.getValue().equals(toHexString(preimage))) {
 				System.out.println("failed! " + e.getValue() + " can't be gotten from " + toHexString(firstWordHash));
 			}
 			byte[] secondWord = reduce(firstWordHash, 0);
 			byte[] secondWordHash = hash(secondWord);
-			byte[] preimage2 = getPreimage(e.getValue(), toHexString(secondWordHash), 0);
+			byte[] preimage2 = getPreimage(e.getValue(), toHexString(secondWordHash));
 			if (!toHexString(secondWord).equals(toHexString(preimage2))) {
 				System.out.println("failed! " + toHexString(secondWord) + " can't be gotten from " + toHexString(secondWordHash));
 			}
