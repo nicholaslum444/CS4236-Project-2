@@ -17,8 +17,8 @@ public class Rainbow {
 	private static final boolean NAIVE = false;
 	private static final double NAIVE_TABLE_LENGTH = Math.pow(2, 24);
 	
-	private static final int CHAIN_LENGTH = (int) Math.pow(2, 10);
-	private static final int TABLE_LENGTH = (int) (Math.pow(2, 24) / CHAIN_LENGTH);
+	private static final int CHAIN_LENGTH = (int) Math.pow(2, 7.5);
+	private static final int TABLE_LENGTH = (int) (Math.pow(2, 23.8) / CHAIN_LENGTH);
 	private static final int SEED = 0;
 	
 	private static HashMap<String, String> table = new HashMap<>();
@@ -173,7 +173,7 @@ public class Rainbow {
 				bw.write("0\n");
 			}
 		}
-		System.out.println(found);
+		System.out.println("Words found = " + found);
 		bw.close();
 		sc.close();
 		
@@ -216,9 +216,10 @@ public class Rainbow {
 	private static byte[] reduce(byte[] hash, int iteration) {
 		int start = iteration % 17;
 		byte[] reduced = Arrays.copyOfRange(hash, start, start + 3);
-		for (int i = 0; i < reduced.length; i++) {
-			reduced[i] += (72 - iteration + i) % 63;
-		}
+		//for (int i = 0; i < reduced.length; i++) {
+			//reduced[i] += (72 - iteration + i) % 63;
+		reduced[0] += (71 - iteration) % 61;
+		//}
 		
 		return reduced;
 	}
