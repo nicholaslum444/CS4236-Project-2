@@ -5,6 +5,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,11 +14,11 @@ import java.util.Scanner;
 
 public class Rainbow {
 
-	private static final boolean NAIVE = true;
+	private static final boolean NAIVE = false;
 	private static final double NAIVE_TABLE_LENGTH = Math.pow(2, 24);
 	
-	private static final int CHAIN_LENGTH = (int) Math.pow(2, 5);
-	private static final int TABLE_LENGTH = (int) (Math.pow(2, 23) / CHAIN_LENGTH);
+	private static final int CHAIN_LENGTH = (int) Math.pow(2, 9);
+	private static final int TABLE_LENGTH = (int) (Math.pow(2, 24) / CHAIN_LENGTH);
 	private static final int SEED = 0;
 	
 	private static HashMap<String, String> table = new HashMap<>();
@@ -26,6 +27,9 @@ public class Rainbow {
 	private static HashMap<String, String> words = new HashMap<>();
 	
 	private static int found = 0;
+	
+	private static long bigT = 0;
+	private static long smallT = 0;
 	
 	public static void main(String[] args) throws Exception {
 		
@@ -37,41 +41,47 @@ public class Rainbow {
 
 		System.out.println("Start");
 		
+		timeTest();
+		
 		if (NAIVE) {
 			buildNaive();
-			readTableFromFile();
+			readNaiveTableFromFile();
 			solveNaive();
 //			solveNaiveWithoutTable();
 			return;
 		}
 		
 		// step 0. test
-		testFile();
+		//testFile();
 		System.out.println(toHexString(hash("20c11b")) + " vs " + "b8568363a1734335ee113002ecee05cfce857ae0");
 		System.out.println(toHexString(hash("be7277")) + " vs " + "b8ab210460c74b6c2698debef13decddaf4af47e");
-		System.out.println(toHexString(hash("7f63be")) + " vs " + "722ced0acccc82c1e22b1cb42d683e728bf456e7");
+		System.out.println(toHexString(hash("31894b")) + " vs " + "e63b2bafaab041e3f46165ae557acb0234192d2a");
 		System.out.println(toHexString(hash("500d13")) + " vs " + "ecd42f98ad2c6490fa782b800693593b0ba112a7");
 		
 		// step 1. build
-		build();
-		System.out.println("Table built");
-		writeTableToFile();
-		System.out.println("Table written");
-		//verify();
-		//System.out.println("Table verified");
+		boolean written = true;
+		if (!written) {
+			build();
+			System.out.println("Table built");
+			writeTableToFile();
+			System.out.println("Table written");
+			//verify();
+			//System.out.println("Table verified");
+		} else {
+			readTableFromFile();
+			System.out.println("Table read into memory");
+		}
 		
 		// step 2. crack
 		crack();
 		System.out.println("Crack complete");
+		
+		// step 3. report
+		System.out.println("Speedup = " + ((1000 * bigT) / smallT));
 		System.out.println("End");
 	}
 
 	private static void build() throws Exception {
-		// extra todo
-		// check whether each word hashes to any input hash.
-		
-		// inputs already set in testfile()
-		
 		Random r = new Random(SEED);
 		for (int i = 0; i < TABLE_LENGTH; i++) {
 //			System.out.println(i);
@@ -86,12 +96,8 @@ public class Rainbow {
 			byte[] hash = new byte[20];
 			for (int j = 0; j < CHAIN_LENGTH; j++) {
 				hash = hash(word); // hash w0 -> y0
-				String hashString = toHexString(hash);
+				//String hashString = toHexString(hash);
 				//System.out.println(Arrays.toString(hash));
-				//if (inputs.containsKey(hashString)) {
-					//System.out.println(hashString);
-					//System.out.println(toHexString(word) + " hashes to " + hashString);
-				//}
 				word = reduce(hash, j); // reduce y0 -> w1
 				words.put(toHexString(word), "");
 				//System.out.println(Arrays.toString(hash));
@@ -111,41 +117,49 @@ public class Rainbow {
 	}
 	
 	private static void crack() throws Exception {
+		long startTime = System.currentTimeMillis();
 		BufferedWriter bw = new BufferedWriter(new FileWriter("result.txt"));
-		Scanner sc = new Scanner(new FileInputStream("SAMPLE_INPUT.data"));
+		Scanner sc = new Scanner(new BufferedInputStream(new FileInputStream("SAMPLE_INPUT.data")));
 		for (int i = 0; i < 1000; i++) { // for each given hash
 			
+			// convert given hex string into byte[]
 			ByteBuffer bf = ByteBuffer.allocate(20);
 			for (int j = 0; j < 5; j++) {
 				bf.putInt((int)sc.nextLong(16));
 			}
-			
 			byte[] inputHash = bf.array();
 			String inputHashString = toHexString(inputHash);
-			System.out.println("READ: " + inputHashString);
+			//System.out.println("READ: " + inputHashString);
 
 			byte[] resultWord;
 			boolean got = false;
-			//for (int j = CHAIN_LENGTH; j > 0; j--) {
-			for (int j = 0; j <= CHAIN_LENGTH; j++) {
-				int ccount = 0;
+			for (int j = CHAIN_LENGTH - 1; j >= 0; j--) {
+//			for (int j = 0; j <= CHAIN_LENGTH; j++) {
+				//int ccount = 0;
 				byte[] word = new byte[3];
 				byte[] hash = Arrays.copyOf(inputHash, inputHash.length); // hashed w0 -> y0
 				for (int k = j; k < CHAIN_LENGTH - 1; k++) {
 //					System.out.println(k);
 					word = reduce(hash, k); // reduce yk -> wk+1
 					hash = hash(word); // hash wx -> yx
-					ccount++;
+					//ccount++;
 				}
 				String hashString = toHexString(hash);
 				if (table.containsKey(hashString)) {
-					found++;
-					got = true;
-					System.out.println("found " + hashString + " number " + i + " at chain length " + (j) + " " + ccount);
+					//System.out.println("found " + hashString + " number " + i + " at chain length " + (j) + " " + ccount);
 					resultWord = getPreimage(table.get(hashString), inputHashString, CHAIN_LENGTH - j);
-					bw.write(toHexString(resultWord) + "\n");
-					System.out.println("result = " + toHexString(resultWord));
-					break;
+					String resultWordString = toHexString(resultWord);
+//					if (resultWordString.equals("00")) {
+//						found--;
+//					}
+					if (!resultWordString.equals("00")) {
+//					if (true) {
+						found++;
+						got = true;
+						bw.write(resultWordString + "\n");
+						//System.out.println("result = " + toHexString(resultWord));
+						break;
+					}
 				}
 			}
 			if (!got) {
@@ -155,26 +169,30 @@ public class Rainbow {
 		System.out.println(found);
 		bw.close();
 		sc.close();
+		
+		long endTime = System.currentTimeMillis();
+		long timeTaken = ((endTime - startTime));
+		smallT = timeTaken;
+		System.out.println("Time taken for crack: " + timeTaken + " milliseconds");
 	}
 	
 	private static byte[] getPreimage(String startWordString, String targetHashString, int numOfTimes) throws Exception {
 		// get the preimage of hash by chaining until hash
-		System.out.println(startWordString);
+		//System.out.println(startWordString);
 		byte[] word = toByteArray(startWordString);
-		System.out.println(targetHashString);
+		//System.out.println(targetHashString);
 		byte[] hash = new byte[20];
 		hash = hash(word);
 		//for (int j = 0; j < numOfTimes; j++) {
 		for (int j = 0; j < CHAIN_LENGTH; j++) {
 			if (toHexString(hash).equals(targetHashString)) {
-				System.out.println("last reduction fucntion used = " + j);
+				//System.out.println("last reduction fucntion used = " + (j-1));
 				return word;
 			}
 			word = reduce(hash, j);
 			hash = hash(word);
 		}
 		//System.out.println("gonna return 0");
-		found--;
 		return new byte[1];
 	}
 	
@@ -189,7 +207,7 @@ public class Rainbow {
 	}
 	
 	private static byte[] reduce(byte[] hash, int iteration) {
-		int start = 0;//iteration % 17;
+		int start = iteration % 17;
 		byte[] reduced = Arrays.copyOfRange(hash, start, start + 3);
 		for (int i = 0; i < reduced.length; i++) {
 			reduced[i] += (72 - iteration + i) % 63;
@@ -219,7 +237,7 @@ public class Rainbow {
 	}
 	
 	private static void writeTableToFile() throws Exception {
-		BufferedWriter bw = new BufferedWriter(new FileWriter("complete-table.data"));
+		BufferedWriter bw = new BufferedWriter(new FileWriter("table.data"));
 		for (Map.Entry<String, String> e : table.entrySet()) {
 			StringBuilder sb = new StringBuilder();
 			sb.append(e.getKey());
@@ -290,6 +308,19 @@ public class Rainbow {
 		return failCount > 0;
 	}
 	
+	private static void timeTest() throws Exception {
+		long startTime = System.currentTimeMillis();
+		MessageDigest sha1 = MessageDigest.getInstance("SHA1");
+		for (int i = 0; i < (1024*1024*8); i++) {
+			byte[] b = {(byte) i, (byte) i, (byte) i};
+			sha1.digest(b);
+		}
+		long endTime = System.currentTimeMillis();
+		long timeTaken = ((endTime - startTime));
+		bigT = timeTaken;
+		System.out.println("Time taken for timeTest: " + timeTaken + " milliseconds");
+	}
+	
 	private static void buildNaive() throws Exception {
 		BufferedWriter bw = new BufferedWriter(new FileWriter("complete-table.data"));
 		long startTime = System.currentTimeMillis();
@@ -310,13 +341,29 @@ public class Rainbow {
 	}
 	
 	private static void readTableFromFile() throws Exception {
+		Scanner sc = new Scanner(new BufferedInputStream(new FileInputStream("table.data")));
+		System.out.println(TABLE_LENGTH);
+		//for (int i = 0; i < TABLE_LENGTH; i++) {
+		while (sc.hasNext()) {
+//			/*if (i % 1000000 == 0)*/ System.out.println(i);
+			String finalHashString = sc.next();
+			String originalWordString = sc.next();
+			table.put(finalHashString, originalWordString);
+		}
+		System.out.println("File read. Table size: " + (table.size() + table2.size()));
+		sc.close();
+	}
+	
+	private static void readNaiveTableFromFile() throws Exception {
 		Scanner sc = new Scanner(new BufferedInputStream(new FileInputStream("complete-table.data")));
-		for (int i = 0; i < NAIVE_TABLE_LENGTH/2; i++) {
+		System.out.println(NAIVE_TABLE_LENGTH/2);
+		for (int i = 0; i < ((int)NAIVE_TABLE_LENGTH/2); i++) {
 			if (i % 1000000 == 0) System.out.println(i);
 			String finalHashString = sc.next();
 			String originalWordString = sc.next();
 			table.put(finalHashString, originalWordString);
 		}
+		System.out.println("next table");
 		for (int i = (int) (NAIVE_TABLE_LENGTH/2); i < NAIVE_TABLE_LENGTH; i++) {
 			if (i % 1000000 == 0) System.out.println(i);
 			String finalHashString = sc.next();
